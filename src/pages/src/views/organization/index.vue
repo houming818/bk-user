@@ -193,6 +193,8 @@
               v-bkloading="{ isLoading: basicLoading, zIndex: 0 }"
               :user-message="userMessage"
               :is-empty-search="isEmptySearch"
+              :is-table-data-error="isTableDataError"
+              :is-table-data-empty="isTableDataEmpty"
               :is-click.sync="isClick"
               :loading="basicLoading"
               :fields-list="fieldsList"
@@ -204,7 +206,9 @@
               @showTableLoading="showTableLoading"
               @closeTableLoading="closeTableLoading"
               @updateTableData="updateTableData"
-              @updateHeardList="updateHeardList" />
+              @updateHeardList="updateHeardList"
+              @handleRefresh="getTableData"
+              @handleClickEmpty="handleClickEmpty" />
             <div class="table-pagination" v-if="noSearchOrSearchDepartment && paginationConfig.count > 0">
               <div class="table-pagination-left">{{$t('共计')}}
                 {{Math.ceil(paginationConfig.count / paginationConfig.limit)}} {{$t('页')}}，
@@ -228,13 +232,14 @@
     <!-- 新增用户 侧边栏 -->
     <bk-sideslider
       class="king-sideslider"
-      :width="520"
+      :width="630"
       :show-mask="false"
       :is-show.sync="detailsBarInfo.isShow"
-      :quick-close="detailsBarInfo.quickClose"
+      :quick-close="true"
       :title="detailsBarInfo.title"
-      :style="{ visibility: isHideBar ? 'hidden' : 'visible' }">
-      <div slot="content" class="member-content" v-if="detailsBarInfo.isShow">
+      :style="{ visibility: isHideBar ? 'hidden' : 'visible' }"
+      :before-close="beforeClose">
+      <div slot="content" v-if="detailsBarInfo.isShow">
         <DetailsBar
           :details-bar-info="detailsBarInfo"
           :current-profile="currentProfile"
@@ -369,7 +374,6 @@ export default {
         type: '',
         basicLoading: false,
         title: '',
-        quickClose: true,
       },
       // 点击保存时打开 loading，临时在样式上隐藏侧边栏
       isHideBar: false,
@@ -394,6 +398,8 @@ export default {
       isEmptySearch: false,
       // 表格请求出错
       isTableDataError: false,
+      // 表格请求结果为空
+      isTableDataEmpty: false,
       // 是否勾选了表格数据
       isClick: false,
       isShowSetDepartments: false,
@@ -662,11 +668,12 @@ export default {
         }
 
         this.isEmptyDepartment = false;
+        this.isTableDataEmpty = false;
         this.isEmptySearch = false;
         if (this.handleTabData.totalNumber === 0) {
           this.isEmptyDepartment = true;
         } else if (this.paginationConfig.count === 0) {
-          this.isEmptySearch = true;
+          this.isTableDataEmpty = true;
         }
 
         this.isTableDataError = false;
@@ -741,6 +748,12 @@ export default {
         }
       });
     },
+    // 清空筛选条件
+    handleClickEmpty() {
+      this.tableSearchKey = [];
+      this.checkSearchKey = '';
+      this.getTableData();
+    },
     // 搜索table
     handleTableSearch(list) {
       if (!list.length) return this.getTableData();
@@ -759,6 +772,7 @@ export default {
       const params = valueList.join('&');
       this.$store.dispatch('organization/getMultiConditionQuery', params).then((res) => {
         if (res.result) {
+          this.isEmptySearch = res.data.count === 0;
           this.filterUserData(res.data.results);
         }
       })
@@ -972,10 +986,9 @@ export default {
     viewDetails(item) {
       this.currentProfile = item;
       this.detailsBarInfo.type = 'view';
-      this.detailsBarInfo.title = this.currentProfile.display_name;
+      this.detailsBarInfo.title = this.$t('用户详情');
       this.detailsBarInfo.isShow = true;
       this.detailsBarInfo.basicLoading = false;
-      this.detailsBarInfo.quickClose = true;
     },
     updateTableData(item) {
       this.tableData = item;
@@ -1063,14 +1076,14 @@ export default {
     // 编辑成员信息
     editProfile() {
       this.detailsBarInfo.type = 'edit';
-      this.detailsBarInfo.quickClose = false;
+      this.detailsBarInfo.title = this.$t('编辑用户');
     },
     handleCancelEdit() {
       if (this.detailsBarInfo.type === 'add') {
         this.detailsBarInfo.isShow = false;
       } else {
         this.detailsBarInfo.type = 'view';
-        this.detailsBarInfo.quickClose = true;
+        this.detailsBarInfo.title = this.$t('用户详情');
       }
     },
     // 新增用户 调用接口，拿到数据传给子组件
@@ -1079,7 +1092,6 @@ export default {
       this.detailsBarInfo.title = this.$t('新增用户');
       this.detailsBarInfo.type = 'add';
       this.detailsBarInfo.isShow = true;
-      this.detailsBarInfo.quickClose = false;
       // 设置所在的组织
       const department = this.treeSearchResult ? this.treeSearchResult : this.currentParam.item;
       this.detailsBarInfo.departments = [{
@@ -1268,6 +1280,25 @@ export default {
         .finally(() => {
           this.clickSecond = false;
         });
+    },
+    beforeClose() {
+      if (this.detailsBarInfo.type === 'view') {
+        this.detailsBarInfo.isShow = false;
+      } else {
+        if (window.changeInput) {
+          this.$bkInfo({
+            title: this.$t('确认离开当前页？'),
+            subTitle: this.$t('离开将会导致未保存信息丢失'),
+            okText: this.$t('离开'),
+            confirmFn: () => {
+              this.detailsBarInfo.isShow = false;
+              window.changeInput = false;
+            },
+          });
+        } else {
+          this.detailsBarInfo.isShow = false;
+        }
+      }
     },
     // 点击某个树节点
     handleClickTreeNode(item, isSearchProfile = false) {

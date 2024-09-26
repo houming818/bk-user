@@ -18,7 +18,7 @@
       :multiple="item.type === 'multi_enum'"
       :disabled="editStatus && !item.editable"
       :ext-cls="item.isError ? 'input-error' : ''"
-      @change="verifyInput(item)">
+      @change="changSelect">
       <bk-option
         v-for="(option, index) in item.options"
         :key="index"
@@ -46,12 +46,8 @@ export default {
     },
   },
   methods: {
-    verifyInput(item) {
-      if (item.type === 'one_enum') {
-        item.isError = !!(item.require && (!item.value && item.value !== 0));
-      } else {
-        item.isError = !!(item.require && !item.value.length);
-      }
+    changSelect() {
+      window.changeInput = true;
     },
   },
 };
